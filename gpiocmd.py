@@ -17,7 +17,7 @@ def setup_logging(verbosity, log_format):
 
 if __name__ == "__main__":
     DESCRIPTION = """
-Run an arbitrary commands when GPIO buttons is pressed on Rasberry PI. Buttons
+Run arbitrary commands when GPIO buttons is pressed on Rasberry PI. Buttons
 can differentiate on multiple actions by how many seconds the button is pressed.
 Used and tested with Adafruit 2.8" screen with four buttons.
 """
