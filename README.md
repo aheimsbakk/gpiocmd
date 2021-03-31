@@ -1,64 +1,53 @@
 # gpiocmd
 
-Run an arbitrary command when a GPIO button is pressed on Rasberry PI. Used and tested with Adafruit 2.8" screen with four buttons.
+Run arbitrary commands when GPIO buttons is pressed on Rasberry PI. Buttons can
+differentiate multiple actions by how many seconds one button is pressed.
+Used and tested with Adafruit 2.8" screen with four buttons.
 
 ## Usage
 
 ```
-usage: gpiocmd.py [-h] [-v] [--log-format FORMAT] [-k] [-c FILE]
+usage: gpiocmd.py [-h] [-v] [--log-format FORMAT] [-k] -c FILE
 
-Run an arbitrary commands when GPIO buttons is pressed on Rasberry PI. Buttons
-can differentiate on multiple actions by how many seconds the button is pressed.
-Used and tested with Adafruit 2.8" screen with four buttons.
+Run arbitrary commands when GPIO buttons is pressed on Rasberry PI. Buttons can
+differentiate multiple actions by how many seconds one button is pressed. Used
+and tested with Adafruit 2.8" screen with four buttons.
 
 optional arguments:
   -h, --help              show this help message and exit
-  -v, --verbose           verbosity level
+  -v, --verbose           verbosity level increased with each to WARN, INFO and
+                          DEBUG - ERROR and CRITICAL is always visible
   --log-format FORMAT     customize log format, see python logging package for
                           information on the format
   -k, --kill-running      kill running command before running new command
+
+required arguments:
   -c FILE, --config FILE  YAML configuration file
 
-Example YAML configuration file used with the -c option. This example only
-executes the bash command.
+Example YAML configuration file used with the -c option. Configure channels
+(GPIO pins in BCM mode) and add commands that will be executed when buttons are
+pressed. Add multiple commands for each button. Command run immediately or after
+specified wait delay in seconds. This example only executes the bash commands.
 
 ---
-- pin: 17
-  seconds: 0
-  cmd: bash -c 'echo button 17 pressed'
-- pin: 17
-  seconds: 1
-  cmd: bash -c 'echo button 17 pressed for 1 second'
-- pin: 27
-  cmd: bash -c 'echo button 27 pressed'
+17:
+  commands:
+    - run: echo button 1 pressed
+    - run: echo button 1 pressed for 1 second
+      wait: 1
+    - run: echo button 1 pressed for 2 seconds
+      wait: 2
+22:
+  commands:
+    - run: echo button 2 pressed
+23:
+  commands:
+    - run: echo button 3 pressed
+27:
+  commands:
+    - run: echo button 4 pressed
 ```
 
-
-## Configuration file format
-
-Commands to run defined in a YAML file. Each command is connected to a pin and have a optional time in seconds connected to it. Command will only be run if minimum number of seconds have passed when the button is released. If seconds is not specified it defaults to `0`.
-
-```yml
----
-- pin: 17
-  seconds: 0
-  cmd: bash -c 'echo button 17 pressed'
-- pin: 17
-  seconds: 1
-  cmd: bash -c 'echo button 17 pressed for 1 second'
-- pin: 17
-  seconds: 2
-  cmd: bash -c 'echo button 17 pressed for 2 seconds'
-- pin: 22
-  seconds: 0
-  cmd: bash -c 'echo button 22 pressed'
-- pin: 23
-  seconds: 0
-  cmd: bash -c 'echo button 23 pressed'
-- pin: 27
-  seconds: 0
-  cmd: bash -c 'echo button 27 pressed'
-```
 <!---
 # vim: set spell spelllang=en:
 -->

@@ -1,17 +1,17 @@
 ---
 17:
   commands:
-    - run: echo button 17 pressed for 2 seconds
-      wait: 2
-    - run: echo button 17 pressed
-    - run: echo button 17 pressed for 1 second
+    - run: echo button 1 pressed
+    - run: echo button 1 pressed for 1 second
       wait: 1
+    - run: echo button 1 pressed for 2 seconds
+      wait: 2
 22:
   commands:
-    - run: echo button 22 pressed
+    - run: echo button 2 pressed
 23:
   commands:
-    - run: echo button 23 pressed
+    - run: echo button 3 pressed
 27:
   commands:
     - run: gpio -g pwm 18 1000
