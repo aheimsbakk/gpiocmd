@@ -14,12 +14,4 @@
     - run: echo button 3 pressed
 27:
   commands:
-    - run: gpio -g pwm 18 1000
-    - run: gpio -g pwm 18 750
-      wait: 1
-    - run: gpio -g pwm 18 500
-      wait: 2
-    - run: gpio -g pwm 18 250
-      wait: 3
-    - run: gpio -g pwm 18 0
-      wait: 4
+    - run: echo button 4 pressed
