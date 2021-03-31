@@ -47,13 +47,12 @@ executes the bash command.
         default='%(filename)s: %(levelname)s: %(message)s')
     parser.add_argument('-k', '--kill-running', dest='kill', action='store_true',
         help='kill running command before running new command', default=False)
-    parser.add_argument('-c', '--config', metavar='FILE', dest='config_file',
-        type=argparse.FileType('r'), help='YAML configuration file')
+
+    required = parser.add_argument_group('required arguments')
+    required.add_argument('-c', '--config', metavar='FILE', dest='config_file',
+        required=True, type=argparse.FileType('r'), help='YAML configuration file')
 
     args = parser.parse_args()
     setup_logging(args.verbosity, args.log_format)
-
-    if args.config_file is None:
-        parser.print_usage()
 
 # vim: set spell spelllang=en:
