@@ -60,8 +60,8 @@ def run_proc(command, repeat):
         # sleep for repeat seconds, stop if we need to
         sleep_for = repeat
         while CONFIG.get('running', False) and sleep_for > 0:
-            time.sleep(0.01)
-            sleep_for -= 0.01
+            time.sleep(0.05)
+            sleep_for -= 0.05
 
 def button_pressed(channel):
     """
@@ -99,6 +99,8 @@ def button_pressed(channel):
                 # kill last command before running a new
                 proc = CONFIG.get('running', None)
                 CONFIG['running'] = False
+
+                # FIXME: https://stackoverflow.com/questions/32222681/how-to-kill-a-process-group-using-python-subprocess
                 if proc is not None and KILL:
                     logging.debug("killing process %d", proc.pid)
                     proc.terminate()
