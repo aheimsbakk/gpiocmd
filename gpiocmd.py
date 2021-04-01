@@ -5,6 +5,8 @@ Application for executing arbitrary command when GPIO buttons is pressed on Rasp
 
 import argparse
 import logging
+import os
+import signal
 import subprocess
 import sys
 import threading
@@ -43,25 +45,29 @@ def log_exception(error_msg, exception, level=logging.ERROR):
     except AttributeError:
         sys.exit(1)
 
-def run_proc(command, repeat):
+def run_proc(command, repeat, background=False):
     """
     Run process, once or repeat every "repeat" second.
     """
 
     # run thread as long as no other command is started
     while CONFIG.get('running', False):
-        logging.info('will now run command: %s', command)
-        proc = subprocess.Popen(command, shell=True)
-        logging.debug('saving pid %d to memory', proc.pid)
-        CONFIG['running'] = proc
+        bgstr = " in background" if background else ""
+        logging.info('will now run%s command: %s', bgstr, command)
+        proc = subprocess.Popen(command, shell=True, start_new_session=True)
+
+        if not background:
+            logging.debug('saving pid %d to memory', proc.pid)
+            CONFIG['process'] = proc
+
         if repeat == 0:
             break
 
         # sleep for repeat seconds, stop if we need to
         sleep_for = repeat
         while CONFIG.get('running', False) and sleep_for > 0:
-            time.sleep(0.01)
-            sleep_for -= 0.01
+            time.sleep(0.05)
+            sleep_for -= 0.05
 
 def button_pressed(channel):
     """
@@ -96,23 +102,29 @@ def button_pressed(channel):
             if cmd.get('wait', 0) <= time_pressed:
                 logging.debug('button pressed for %d seconds', time_pressed)
 
-                # kill last command before running a new
-                proc = CONFIG.get('running', None)
-                CONFIG['running'] = False
-                if proc is not None and KILL:
-                    logging.debug("killing process %d", proc.pid)
-                    proc.terminate()
+                # kill last command before running a new if it's not a background command
+                if not cmd.get('background', False):
+                    proc = CONFIG.get('process', None)
+                    CONFIG['running'] = False
 
-                # wait for last command to finish
-                if "thread" in CONFIG:
-                    CONFIG['thread'].join()
+                    if proc is not None and KILL:
+                        logging.debug("killing process %d and subprocesses", proc.pid)
+                        pgrp = os.getpgid(proc.pid)
+                        os.killpg(pgrp, signal.SIGTERM)
+
+                    # wait for last command to finish
+                    if "thread" in CONFIG:
+                        CONFIG['thread'].join()
 
                 # run command and save it so we can kill it when a new button is pressed
                 CONFIG['running'] = True
                 thread = threading.Thread(target=run_proc, args=(cmd['run'],
-                    cmd.get('repeat', 0)), daemon=True)
+                    cmd.get('repeat', 0), cmd.get('background', False)), daemon=True)
                 thread.start()
-                CONFIG['thread'] = thread
+
+                # only save thread if it's not a background process, so we can stop it
+                if not cmd.get('background', False):
+                    CONFIG['thread'] = thread
                 break
 
 if __name__ == "__main__":
@@ -128,7 +140,9 @@ Example YAML configuration file used with the -c option. Configure channels
 (GPIO pins in BCM mode) and add commands that will be executed when buttons are
 pressed. Add multiple commands for each button. Command run immediately or
 after specified wait delay in seconds. Repeat last command after repeat seconds
-until next command is executed. This example only executes the bash commands.
+until next command is executed. Background command will not interrupt running
+command, and will not be killed even if -k is specified. This example only
+executes the bash commands.
 
 ---
 17:
@@ -146,6 +160,7 @@ until next command is executed. This example only executes the bash commands.
 23:
   commands:
     - run: echo button 3 pressed
+      background: true
 27:
   commands:
     - run: echo button 4 pressed

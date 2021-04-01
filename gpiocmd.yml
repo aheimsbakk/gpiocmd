@@ -14,6 +14,7 @@
 23:
   commands:
     - run: echo button 3 pressed
+      background: true
 27:
   commands:
     - run: echo button 4 pressed
