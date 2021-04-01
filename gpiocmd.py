@@ -96,11 +96,11 @@ def button_pressed(channel):
         time_pressed = fall_time_ms // 1000
 
         # sort commands for the button, in reverse order
-        commands = sorted(CONFIG[channel]['commands'], key=lambda c: c.get('wait', 0), reverse=True)
+        commands = sorted(CONFIG[channel]['commands'], key=lambda c: c.get('pressed_for', 0), reverse=True)
         for cmd in commands:
 
             # if button was pressed equal or longer than the command
-            if cmd.get('wait', 0) <= time_pressed:
+            if cmd.get('pressed_for', 0) <= time_pressed:
                 logging.debug('button pressed for %d seconds', time_pressed)
 
                 # kill last command before running a new if it's not a background command
@@ -120,7 +120,7 @@ def button_pressed(channel):
                 # run command and save it so we can kill it when a new button is pressed
                 CONFIG['running'] = True
                 thread = threading.Thread(target=run_proc, args=(cmd['run'],
-                    cmd.get('repeat', 0), cmd.get('background', False)), daemon=True)
+                    cmd.get('repeat_every', 0), cmd.get('background', False)), daemon=True)
                 thread.start()
 
                 # only save thread if it's not a background process, so we can stop it
@@ -150,14 +150,14 @@ This example only executes echo examples.
   commands:
     - run: echo button 1 pressed
     - run: echo button 1 pressed for 1 second
-      wait: 1
+      pressed_for: 1
     - run: echo button 1 pressed for 2 seconds
-      wait: 2
-      repeat: 1
+      pressed_for: 2
+      repeat_every: 1
 22:
   commands:
     - run: echo button 2 pressed
-      repeat: 3
+      repeat_every: 3
 23:
   commands:
     - run: echo button 3 pressed
@@ -165,7 +165,7 @@ This example only executes echo examples.
 27:
   commands:
     - run: echo button 4 pressed
-      repeat: 1
+      repeat_every: 1
 """
 
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
