@@ -30,7 +30,9 @@ Example YAML configuration file used with the -c option. Configure channels
 (GPIO pins in BCM mode) and add commands that will be executed when buttons are
 pressed. Add multiple commands for each button. Command run immediately or
 after specified wait delay in seconds. Repeat last command after repeat seconds
-until next command is executed. This example only executes the bash commands.
+until next command is executed. Background command will not interrupt running
+command, and will not be killed even if -k is specified. This example only
+executes the bash commands.
 
 ---
 17:
@@ -48,6 +50,7 @@ until next command is executed. This example only executes the bash commands.
 23:
   commands:
     - run: echo button 3 pressed
+      background: true
 27:
   commands:
     - run: echo button 4 pressed
