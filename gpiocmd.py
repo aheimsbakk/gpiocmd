@@ -19,12 +19,13 @@ CONFIG = []
 # kill command before running a new one
 KILL = False
 
+# RPi.GPIO not found
+ERROR = None
+
 try:
     import RPi.GPIO as GPIO
-except RuntimeError as err:
-    print('''Error importing RPi.GPIO!
-             This is probably because you need superuser privileges.
-             You can achieve this by using 'sudo' to run your script''')
+except ModuleNotFoundError as err:
+    ERROR = err
 
 def setup_logging(verbosity, log_format):
     """
@@ -129,20 +130,20 @@ def button_pressed(channel):
 
 if __name__ == "__main__":
     DESCRIPTION = """
-Run arbitrary commands when GPIO buttons is pressed on Rasberry PI. Buttons can
-differentiate multiple actions by how many seconds one button is pressed.
-Actions can be configured to repeat at a interval defined in seconds. Used and
+Run arbitrary commands when GPIO buttons are pressed on Raspberry PI. Buttons
+can differentiate multiple actions by how many seconds one button is pressed.
+Actions can be configured to repeat at an interval defined in seconds. Used and
 tested with Adafruit 2.8" screen with four buttons.
 """
 
     EPILOG = """
 Example YAML configuration file used with the -c option. Configure channels
 (GPIO pins in BCM mode) and add commands that will be executed when buttons are
-pressed. Add multiple commands for each button. Command run immediately or
-after specified wait delay in seconds. Repeat last command after repeat seconds
-until next command is executed. Background command will not interrupt running
-command, and will not be killed even if -k is specified. This example only
-executes the bash commands.
+pressed. Add multiple commands for each button. Command runs immediately or
+after how many seconds the button was pressed. Repeat the last command every
+repeat second until the next command is executed. Background command will not
+interrupt the running command, and will not be killed even if -k is specified.
+This example only executes echo examples.
 
 ---
 17:
@@ -189,6 +190,10 @@ executes the bash commands.
     # do the actual parsing
     args = parser.parse_args()
     setup_logging(args.verbosity, args.log_format)
+
+    # If module was not found
+    if ERROR is not None:
+        log_exception("%s", ERROR)
 
     # set variable for killing command before running a new one
     KILL = args.kill
