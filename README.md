@@ -35,7 +35,6 @@ interrupt the running command, and will not be killed even if -k is specified.
 This example only executes echo examples.
 
 ---
----
 17:
   commands:
     - run: echo button 1 pressed
