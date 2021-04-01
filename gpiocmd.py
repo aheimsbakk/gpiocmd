@@ -7,6 +7,7 @@ import argparse
 import logging
 import subprocess
 import sys
+import threading
 import time
 import yaml
 
@@ -41,6 +42,26 @@ def log_exception(error_msg, exception, level=logging.ERROR):
         sys.exit(exception.errno)
     except AttributeError:
         sys.exit(1)
+
+def run_proc(command, repeat):
+    """
+    Run process, once or repeat every "repeat" second.
+    """
+
+    # run thread as long as no other command is started
+    while CONFIG.get('running', False):
+        logging.info('will now run command: %s', command)
+        proc = subprocess.Popen(command, shell=True)
+        logging.debug('saving pid %d to memory', proc.pid)
+        CONFIG['running'] = proc
+        if repeat == 0:
+            break
+
+        # sleep for repeat seconds, stop if we need to
+        sleep_for = repeat
+        while CONFIG.get('running', False) and sleep_for > 0:
+            time.sleep(0.01)
+            sleep_for -= 0.01
 
 def button_pressed(channel):
     """
@@ -77,15 +98,21 @@ def button_pressed(channel):
 
                 # kill last command before running a new
                 proc = CONFIG.get('running', None)
+                CONFIG['running'] = False
                 if proc is not None and KILL:
                     logging.debug("killing process %d", proc.pid)
                     proc.terminate()
 
+                # wait for last command to finish
+                if "thread" in CONFIG:
+                    CONFIG['thread'].join()
+
                 # run command and save it so we can kill it when a new button is pressed
-                logging.info('will now run command: %s', cmd['run'])
-                proc = subprocess.Popen(cmd['run'], shell=True)
-                logging.debug('saving pid %d to memory', proc.pid)
-                CONFIG['running'] = proc
+                CONFIG['running'] = True
+                thread = threading.Thread(target=run_proc, args=(cmd['run'],
+                    cmd.get('repeat', 0)), daemon=True)
+                thread.start()
+                CONFIG['thread'] = thread
                 break
 
 if __name__ == "__main__":
@@ -99,7 +126,8 @@ and tested with Adafruit 2.8" screen with four buttons.
 Example YAML configuration file used with the -c option. Configure channels
 (GPIO pins in BCM mode) and add commands that will be executed when buttons are
 pressed. Add multiple commands for each button. Command run immediately or after
-specified wait delay in seconds. This example only executes the bash commands.
+specified wait delay in seconds. Repeat last command after repeat seconds until
+next command is executed. This example only executes the bash commands.
 
 ---
 17:
@@ -109,15 +137,18 @@ specified wait delay in seconds. This example only executes the bash commands.
       wait: 1
     - run: echo button 1 pressed for 2 seconds
       wait: 2
+      repeat: 1
 22:
   commands:
     - run: echo button 2 pressed
+      repeat: 3
 23:
   commands:
     - run: echo button 3 pressed
 27:
   commands:
     - run: echo button 4 pressed
+      repeat: 1
 """
 
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
