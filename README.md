@@ -1,9 +1,14 @@
 # gpiocmd
 
-Run arbitrary commands when GPIO buttons are pressed on Raspberry PI. Buttons
-can differentiate multiple actions by how many seconds one button is pressed.
-Actions can be configured to repeat at an interval defined in seconds. Used and
-tested with Adafruit 2.8" screen with four buttons.
+Run arbitrary commands when GPIO buttons are pressed on Raspberry PI. Buttons can differentiate multiple actions by how many seconds one button is pressed. Actions can be configured to repeat at an interval defined in seconds. Used and tested with Adafruit 2.8" screen with four buttons.
+
+## Installation
+
+Install with the Python package manager. Example below installs version 0.9.0 for the current user.
+
+```bash
+pip3 install --user https://github.com/aheimsbakk/gpiocmd/archive/refs/tags/0.9.0.zip
+```
 
 ## Usage
 
