@@ -118,16 +118,17 @@ def button_pressed(channel):
 if __name__ == "__main__":
     DESCRIPTION = """
 Run arbitrary commands when GPIO buttons is pressed on Rasberry PI. Buttons can
-differentiate multiple actions by how many seconds one button is pressed. Used
-and tested with Adafruit 2.8" screen with four buttons.
+differentiate multiple actions by how many seconds one button is pressed.
+Actions can be configured to repeat at a interval defined in seconds. Used and
+tested with Adafruit 2.8" screen with four buttons.
 """
 
     EPILOG = """
 Example YAML configuration file used with the -c option. Configure channels
 (GPIO pins in BCM mode) and add commands that will be executed when buttons are
-pressed. Add multiple commands for each button. Command run immediately or after
-specified wait delay in seconds. Repeat last command after repeat seconds until
-next command is executed. This example only executes the bash commands.
+pressed. Add multiple commands for each button. Command run immediately or
+after specified wait delay in seconds. Repeat last command after repeat seconds
+until next command is executed. This example only executes the bash commands.
 
 ---
 17:
