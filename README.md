@@ -35,18 +35,19 @@ interrupt the running command, and will not be killed even if -k is specified.
 This example only executes echo examples.
 
 ---
+---
 17:
   commands:
     - run: echo button 1 pressed
     - run: echo button 1 pressed for 1 second
-      wait: 1
+      pressed_for: 1
     - run: echo button 1 pressed for 2 seconds
-      wait: 2
-      repeat: 1
+      pressed_for: 2
+      repeat_every: 1
 22:
   commands:
     - run: echo button 2 pressed
-      repeat: 3
+      repeat_every: 3
 23:
   commands:
     - run: echo button 3 pressed
@@ -54,7 +55,7 @@ This example only executes echo examples.
 27:
   commands:
     - run: echo button 4 pressed
-      repeat: 1
+      repeat_every: 1
 ```
 
 <!---
