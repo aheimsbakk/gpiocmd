@@ -28,17 +28,17 @@
 # If button is pressed 4 seconds or more, turn off backlight.
 27:
   commands:
-    - run: gpio -g pwm 18 1000
+    - run: gpio -g mode 18 pwm; gpio -g pwm 18 1000
       background: true
-    - run: gpio -g pwm 18 750
+    - run: gpio -g mode 18 pwm; gpio -g pwm 18 750
       background: true
       pressed_for: 1
-    - run: gpio -g pwm 18 500
+    - run: gpio -g mode 18 pwm; gpio -g pwm 18 500
       background: true
       pressed_for: 2
-    - run: gpio -g pwm 18 250
+    - run: gpio -g mode 18 pwm; gpio -g pwm 18 250
       background: true
       pressed_for: 3
-    - run: gpio -g pwm 18 0
+    - run: gpio -g mode 18 pwm; gpio -g pwm 18 0
       background: true
       pressed_for: 4
