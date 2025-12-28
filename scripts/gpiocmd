@@ -31,7 +31,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """
-Application for executing arbitrary command when GPIO buttons is pressed on Raspbery PI.
+Application for executing arbitrary command when GPIO buttons are pressed on Raspberry Pi.
+Refactored to use gpiozero.
 """
 
 import argparse
@@ -45,34 +46,170 @@ import time
 import yaml
 
 # script version
-__version__ = '0.9.0'
+__version__ = '0.11.0'
 
-# save configuration to a global variable
-CONFIG = []
-
-# kill command before running a new one
-KILL = False
-
-# RPi.GPIO not found
-ERROR = None
-
+# Check for gpiozero
 try:
-    import RPi.GPIO as GPIO
-except ModuleNotFoundError as err:
-    ERROR = err
+    from gpiozero import Button
+except ImportError:
+    print("Error: gpiozero library not found. Please install it (sudo apt install python3-gpiozero).")
+    sys.exit(1)
+
+
+class JobManager:
+    """
+    Manages the execution, repetition, and termination of system processes.
+    Replaces the global dictionary state management from the legacy script.
+    """
+    def __init__(self, kill_previous=False):
+        self.kill_previous = kill_previous
+        self.current_process = None
+        self.current_thread = None
+        self.is_running = False
+        self._lock = threading.Lock()
+
+    def stop_current(self):
+        """Signal the running thread to stop and kill process if configured."""
+        with self._lock:
+            self.is_running = False
+
+            # If we need to kill the process physically
+            if self.current_process and self.kill_previous:
+                try:
+                    logging.debug("killing process %d and subprocesses", self.current_process.pid)
+                    pgrp = os.getpgid(self.current_process.pid)
+                    os.killpg(pgrp, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass  # Process already died
+                except Exception as e:
+                    logging.error(f"Error killing process: {e}")
+
+        # Wait for the thread to finish cleanly
+        if self.current_thread and self.current_thread.is_alive():
+            # We don't join here to avoid blocking the button callback event loop,
+            # but setting is_running=False breaks the loop in run_proc
+            pass
+
+    def start_job(self, command, repeat, background):
+        """Starts a new job."""
+        # If not a background job, we manage the single-process slot
+        if not background:
+            self.stop_current()
+
+            # Start new tracking
+            with self._lock:
+                self.is_running = True
+                self.current_thread = threading.Thread(
+                    target=self._run_proc,
+                    args=(command, repeat, background),
+                    daemon=True
+                )
+                self.current_thread.start()
+        else:
+            # Background jobs are fire-and-forget, managed by their own thread
+            bg_thread = threading.Thread(
+                target=self._run_proc,
+                args=(command, repeat, background),
+                daemon=True
+            )
+            bg_thread.start()
+
+    def _run_proc(self, command, repeat, background):
+        """The worker loop running in a thread."""
+        while True:
+            # Check if we should stop (only relevant for non-background jobs)
+            if not background and not self.is_running:
+                break
+
+            bgstr = " in background" if background else ""
+            logging.info('will now run%s command: %s', bgstr, command)
+
+            try:
+                # start_new_session=True is crucial for os.killpg to work later
+                proc = subprocess.Popen(command, shell=True, start_new_session=True)
+
+                if not background:
+                    with self._lock:
+                        self.current_process = proc
+            except Exception as e:
+                logging.error(f"Failed to run command: {e}")
+                break
+
+            if repeat == 0:
+                break
+
+            # Sleep handling with ability to interrupt
+            sleep_for = repeat
+            while sleep_for > 0:
+                if not background and not self.is_running:
+                    break
+                time.sleep(0.05)
+                sleep_for -= 0.05
+
+
+class ButtonHandler:
+    """
+    Wraps a gpiozero Button and handles the logic for timing and command selection.
+    """
+    def __init__(self, pin, config, job_manager):
+        self.pin = pin
+        self.config = config
+        self.job_manager = job_manager
+
+        # Initialize gpiozero Button
+        # pull_up=True matches the legacy GPIO.PUD_UP
+        # bounce_time=0.075 matches legacy 75ms
+        self.btn = Button(pin, pull_up=True, bounce_time=0.075)
+
+        # Event hooks
+        self.btn.when_pressed = self.on_press
+        self.btn.when_released = self.on_release
+
+        self._press_start_ns = 0
+
+    def on_press(self):
+        """Record the timestamp when button is pressed."""
+        self._press_start_ns = time.time_ns()
+        logging.debug("channel %d pressed", self.pin)
+
+    def on_release(self):
+        """Calculate duration and trigger command."""
+        rising_time_ns = time.time_ns()
+
+        # Calculate duration in milliseconds
+        fall_time_ms = (rising_time_ns - self._press_start_ns) // 10**6
+        logging.info("Channel %d was pressed for %d ms", self.pin, fall_time_ms)
+
+        # Duration in seconds (integer)
+        time_pressed = fall_time_ms // 1000
+
+        # Sort commands by pressed_for time (descending) to find longest match
+        commands = sorted(self.config.get('commands', []),
+                          key=lambda c: c.get('pressed_for', 0),
+                          reverse=True)
+
+        for cmd in commands:
+            # Check if button was pressed long enough for this command
+            if cmd.get('pressed_for', 0) <= time_pressed:
+                logging.debug('button match for %d seconds', time_pressed)
+
+                self.job_manager.start_job(
+                    command=cmd['run'],
+                    repeat=cmd.get('repeat_every', 0),
+                    background=cmd.get('background', False)
+                )
+                break
+
 
 def setup_logging(verbosity, log_format):
-    """
-    Configure logging module for use in this script.
-    """
+    """Configure logging module."""
     verbosity = min(verbosity, 3)
     loglevel = logging.ERROR - (verbosity * 10)
     logging.basicConfig(level=loglevel, format=log_format)
 
+
 def log_exception(error_msg, exception, level=logging.ERROR):
-    """
-    Log an exception and exit program.
-    """
+    """Log an exception and exit program."""
     logging.log(level, error_msg, str(exception))
     logging.debug('', exc_info=True)
     try:
@@ -80,105 +217,16 @@ def log_exception(error_msg, exception, level=logging.ERROR):
     except AttributeError:
         sys.exit(1)
 
-def run_proc(command, repeat, background=False):
-    """
-    Run process, once or repeat every "repeat" second.
-    """
-
-    # run thread as long as no other command is started
-    while CONFIG.get('running', False):
-        bgstr = " in background" if background else ""
-        logging.info('will now run%s command: %s', bgstr, command)
-        proc = subprocess.Popen(command, shell=True, start_new_session=True)
-
-        if not background:
-            logging.debug('saving pid %d to memory', proc.pid)
-            CONFIG['process'] = proc
-
-        if repeat == 0:
-            break
-
-        # sleep for repeat seconds, stop if we need to
-        sleep_for = repeat
-        while CONFIG.get('running', False) and sleep_for > 0:
-            time.sleep(0.05)
-            sleep_for -= 0.05
-
-def button_pressed(channel):
-    """
-    Check is if a button is pressed.
-    If button was pressed, run corresponding command.
-    """
-
-    # fetch the state of the button pressed
-    channel_state = GPIO.input(channel)
-    logging.debug("channel %d has value %d", channel, channel_state)
-
-    if channel_state == GPIO.LOW:
-        # log time button was pressed in nanoseconds
-        CONFIG[channel]['falling_time_ns'] = time.time_ns()
-
-    if channel_state == GPIO.HIGH:
-        # log time button was released in nanoseconds
-        rising_time_ns = time.time_ns()
-
-        # how long was the button pressed in milliseconds
-        fall_time_ms = ( rising_time_ns - CONFIG[channel]['falling_time_ns'] ) // 10**6
-        logging.info("Channel %d was falling for %d ms", channel, fall_time_ms)
-
-        # how long button was pressed in seconds
-        time_pressed = fall_time_ms // 1000
-
-        # sort commands for the button, in reverse order
-        commands = sorted(CONFIG[channel]['commands'], key=lambda c: c.get('pressed_for', 0), reverse=True)
-        for cmd in commands:
-
-            # if button was pressed equal or longer than the command
-            if cmd.get('pressed_for', 0) <= time_pressed:
-                logging.debug('button pressed for %d seconds', time_pressed)
-
-                # kill last command before running a new if it's not a background command
-                if not cmd.get('background', False):
-                    proc = CONFIG.get('process', None)
-                    CONFIG['running'] = False
-
-                    if proc is not None and KILL:
-                        logging.debug("killing process %d and subprocesses", proc.pid)
-                        pgrp = os.getpgid(proc.pid)
-                        os.killpg(pgrp, signal.SIGTERM)
-
-                    # wait for last command to finish
-                    if "thread" in CONFIG:
-                        CONFIG['thread'].join()
-
-                # run command and save it so we can kill it when a new button is pressed
-                CONFIG['running'] = True
-                thread = threading.Thread(target=run_proc, args=(cmd['run'],
-                    cmd.get('repeat_every', 0), cmd.get('background', False)), daemon=True)
-                thread.start()
-
-                # only save thread if it's not a background process, so we can stop it
-                if not cmd.get('background', False):
-                    CONFIG['thread'] = thread
-                break
 
 if __name__ == "__main__":
     DESCRIPTION = """
-Run arbitrary commands when GPIO buttons are pressed on Raspberry PI. Buttons
+Run arbitrary commands when GPIO buttons are pressed on Raspberry Pi. Buttons
 can differentiate multiple actions by how many seconds one button is pressed.
-Actions can be configured to repeat at an interval defined in seconds. Used and
-tested with Adafruit 2.8" screen with four buttons.
+Actions can be configured to repeat at an interval defined in seconds.
+Refactored to use gpiozero.
 """
-
     EPILOG = """
-Example YAML configuration file used with the -c option. Configure channels
-(GPIO pins in BCM mode) and add commands that will be executed when buttons are
-pressed. Add multiple commands for each button. Command runs immediately or
-after how many seconds the button was pressed. Repeat the last command every
-repeat second until the next command is executed. Background command will not
-interrupt the running command, and will not be killed even if -k is specified.
-This example only executes echo examples.
-
+Example YAML configuration:
 ---
 17:
   commands:
@@ -188,77 +236,75 @@ This example only executes echo examples.
     - run: echo button 1 pressed for 2 seconds
       pressed_for: 2
       repeat_every: 1
-22:
-  commands:
-    - run: echo button 2 pressed
-      repeat_every: 3
-23:
-  commands:
-    - run: echo button 3 pressed
-      background: true
-27:
-  commands:
-    - run: echo button 4 pressed
-      repeat_every: 1
 """
 
     parser = argparse.ArgumentParser(description=DESCRIPTION, epilog=EPILOG,
         formatter_class=lambda prog:
         argparse.RawDescriptionHelpFormatter(prog, max_help_position=40, width=80))
 
-    # parse optional command line arguments
     parser.add_argument('-V', '--version', action='version', version="%(prog)s " + __version__)
     parser.add_argument('-v', '--verbose', dest='verbosity', action='count',
-        help='''verbosity level increased with each to WARN, INFO and DEBUG -
-            ERROR and CRITICAL is always visible''', default=0)
+        help='verbosity level increased with each to WARN, INFO and DEBUG', default=0)
     parser.add_argument('--log-format', metavar='FORMAT', dest='log_format', type=str,
-        help='customize log format, see python logging package for information on the format',
+        help='customize log format',
         default='%(filename)s: %(levelname)s: %(message)s')
     parser.add_argument('-k', '--kill-running', dest='kill', action='store_true',
         help='kill running command before running new command', default=False)
 
-    # parse required command line arguments
     required = parser.add_argument_group('required arguments')
     required.add_argument('-c', '--config', metavar='FILE', dest='config_file',
         required=True, type=argparse.FileType('r'), help='YAML configuration file')
 
-    # do the actual parsing
     args = parser.parse_args()
     setup_logging(args.verbosity, args.log_format)
 
-    # If module was not found
-    if ERROR is not None:
-        log_exception("%s", ERROR)
-
-    # set variable for killing command before running a new one
-    KILL = args.kill
-
-    # load the configuration file
+    # Load Config
     try:
-        CONFIG = yaml.safe_load(args.config_file.read())
-        logging.debug("configuration read: %s", str(CONFIG))
+        config_data = yaml.safe_load(args.config_file.read())
+        logging.debug("configuration read: %s", str(config_data))
     except yaml.YAMLError as err:
         log_exception("loading config file: %s", err)
 
+    if not config_data:
+        logging.error("Configuration file is empty")
+        sys.exit(1)
+
+    # Initialize Job Manager
+    job_manager = JobManager(kill_previous=args.kill)
+
+    # Initialize Buttons
+    # We store button handlers in a list to keep them in memory
+    active_buttons = []
+
     try:
-        # set BCM mode for channels (GPIO pins)
-        GPIO.setmode(GPIO.BCM)
+        logging.info("Initializing GPIO buttons...")
 
-        # traverse all channels in configuration file and register events
-        # all for channels
-        for ch in CONFIG.keys():
-            GPIO.setup(ch, GPIO.IN, GPIO.PUD_UP)
-            GPIO.add_event_detect(ch, GPIO.BOTH, button_pressed, 75)
+        for pin_num, pin_config in config_data.items():
+            if not isinstance(pin_num, int):
+                logging.warning(f"Skipping invalid pin number: {pin_num}")
+                continue
 
-        # sleep as long we have at least one channel in configuration file
-        while len(CONFIG.keys()) > 0:
-            time.sleep(1)
-    except KeyboardInterrupt as err:
-        log_exception("keyboard interrupt %s", err, logging.INFO)
+            try:
+                handler = ButtonHandler(pin_num, pin_config, job_manager)
+                active_buttons.append(handler)
+                logging.info(f"Registered button on GPIO {pin_num}")
+            except Exception as e:
+                log_exception(f"Failed to setup GPIO {pin_num}: %s", e)
+
+        if not active_buttons:
+            logging.error("No valid buttons configured. Exiting.")
+            sys.exit(1)
+
+        logging.info("System ready. Waiting for input...")
+
+        # signal.pause() is the efficient way to keep the script alive
+        # while waiting for gpiozero events
+        signal.pause()
+
+    except KeyboardInterrupt:
+        logging.info("Keyboard interrupt received. Exiting.")
     finally:
-        # do cleanup by resetting GPIO channels
-        for ch in CONFIG.keys():
-            if isinstance(ch, int):
-                GPIO.cleanup(int(ch))
+        # gpiozero handles GPIO cleanup automatically on exit
+        pass
 
 # vim: set spell spelllang=en:

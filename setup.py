@@ -6,7 +6,7 @@ from setuptools import setup
 
 setup(
     name = 'gpiocmd',
-    version = '0.10.0',
+    version = '0.11.0',
     description = 'Run arbitrary commands when GPIO buttons are pressed on Raspberry PI.',
     url = 'https://github.com/aheimsbakk/gpiocmd',
     author = 'Arnulf Heimsbakk',
@@ -18,7 +18,7 @@ setup(
                   ('share/doc/gpiocmd', ['README.md']),
                   ],
     install_requires=['pyyaml~=6.0',
-                      'RPi.GPIO~=0.7',
+                      'gpiozero~=2.0',
                       ],
 
     classifiers=[

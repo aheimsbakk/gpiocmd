@@ -4,10 +4,10 @@ Run arbitrary commands when GPIO buttons are pressed on Raspberry PI. Buttons ca
 
 ## Installation
 
-Install with the Python package manager. Example below installs version 0.9.0 for the current user.
+Install with the Python package manager. Example below installs version 0.11.0 for the current user.
 
 ```bash
-pip3 install --user https://github.com/aheimsbakk/gpiocmd/archive/refs/tags/0.9.0.zip
+pip3 install --user https://github.com/aheimsbakk/gpiocmd/archive/refs/tags/0.11.0.zip
 ```
 
 ## Usage
